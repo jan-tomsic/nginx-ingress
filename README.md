@@ -2,32 +2,85 @@
 
 Create namespaces that will be used
 
-    kubectl create namespace ingress-nginx
     kubectl create namespace backend
 
 # Install nginx-ingress-controller
 
-
-Configure `nginx-ingress-controller-values.yaml` and install the ingress controller using a helm chart
-
+Enable ingress plugin in minikube to install ingress-nginx-controller
 
 ```bash
-helm upgrade --install nginx-ingress-controller oci://registry-1.docker.io/bitnamicharts/nginx-ingress-controller -f nginx-ingress-controller-values.yaml -n ingress-nginx
+minikube addons enable ingress
+```
+
+In order to enable SSL Passthrough, we need to patch the deployment with `ingress-nginx-controller-patch.yaml`, which configures container arguments to start with enable-ssl-passthrough enabled.
+
+```yaml
+spec:
+  template:
+    spec:
+      containers:
+      - name: controller
+        args:
+        - /nginx-ingress-controller
+        - --election-id=ingress-nginx-leader
+        - --controller-class=k8s.io/ingress-nginx
+        - --watch-ingress-without-class=true
+        - --configmap=$(POD_NAMESPACE)/ingress-nginx-controller
+        - --tcp-services-configmap=$(POD_NAMESPACE)/tcp-services
+        - --udp-services-configmap=$(POD_NAMESPACE)/udp-services
+        - --validating-webhook=:8443
+        - --validating-webhook-certificate=/usr/local/certificates/cert
+        - --validating-webhook-key=/usr/local/certificates/key
+        - --enable-ssl-passthrough=true
+```
+
+Apply the patch using `kubectl`
+
+```bash
+kubectl -n ingress-nginx patch deployment ingress-nginx-controller --patch-file ingress-nginx-controller-patch.yaml
+```
+
+Verify installation
+
+```bash
+kubectl -n ingress-nginx get pods
 ```
 
 # Create a self-signed certificate
 
-Configure `openssl.cnf` and create a self signed certificate
+Configure `cert/openssl.cnf` and create a self signed certificate
 
-```bash
-openssl req -new -key tls.key -out tls.csr -config openssl.cnf
+```
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = req_ext
+prompt = no
+
+[req_distinguished_name]
+CN = myservice.example.com
+
+[req_ext]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = myservice.example.com
 ```
 
-## Save certificate as kubernetes secret
+Generate the certificate
 
-    kubectl create secret tls myservice-cert --cert=tls.crt --key=tls.key
+```bash
+openssl genrsa -out tls.key 2048
+openssl req -new -key tls.key -out tls.csr -config openssl.cnf
+openssl x509 -req -in tls.csr -signkey tls.key -out tls.crt -extensions req_ext -extfile openssl.cnf -days 365
+```
 
-# Install nginx web server as http/https backend
+## Create kubernetes secret with the created certificate
+
+```bash
+kubectl -n backend create secret tls myservice-cert --cert=tls.crt --key=tls.key
+```
+
+# Install nginx web server as http/https backend service
 
 Configure `nginx-values.yaml` file to enable tls, load certificates from existing secret and configure https server block
 
@@ -55,13 +108,76 @@ serverBlock: |-
   }
 ```
 
-Install nginx using a helm chart and custom `nginx-values.yaml` file
+Install nginx backend service using a helm chart and custom `nginx-values.yaml` file
 
-    helm install nginx-backend oci://registry-1.docker.io/bitnamicharts/nginx -f nginx-values.yaml
+```bash
+helm -n backend install nginx-backend oci://registry-1.docker.io/bitnamicharts/nginx -f nginx-values.yaml
+```
+
+Verify installation
+```bash
+kubectl -n backend get pods
+```
 
 # Configure ingress
 
-Modify `ingress.yaml` with service name, host, port, certificate secretName and apply
+Modify `backend-ingress.yaml` with service name, host, port, certificate secretName and apply.
+Additionally configure `ingressClassName` and annotations.
 
-    kubectl apply -f ingress.yaml
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: myservice-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: myservice.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nginx-backend
+                port:
+                  number: 443
+  tls:
+    - hosts:
+        - myservice.example.com
+      secretName: myservice-cert
+```
+
+Apply the ingress configuration
+
+```bash
+kubectl -n backend apply -f backend-ingress.yaml
+```
+
+# Verify connectivity
+
+Check connectivity using curl. If you add myservice.example.com to local hosts file, you can skip the `--resolve` parameter.
+
+```bash
+curl -k --resolve "myservice.example.com:443:$( minikube ip )" -i https://myservice.example.com/
+```
+
+Verify the certificate
+
+```bash
+curl -k --resolve "myservice.example.com:443:$( minikube ip )" -vI https://myservice.example.com/
+```
+
+Check the Server certificate properties, it contains our self signed certificate.
+
+```
+* Server certificate:
+*  subject: CN=myservice.example.com
+*  start date: Dec  4 15:57:59 2024 GMT
+*  expire date: Dec  4 15:57:59 2025 GMT
+*  issuer: CN=myservice.example.com
+*  SSL certificate verify result: self signed certificate (18), continuing anyway.
+```
 
