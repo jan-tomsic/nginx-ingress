@@ -1,0 +1,5 @@
+extraArgs:
+  enable-ssl-passthrough: true
+
+service:
+  type: NodePort
