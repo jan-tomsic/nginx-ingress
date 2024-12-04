@@ -2,9 +2,17 @@ This repository contains instructions and files for setting up ingress-nginx-con
 
 # Environment setup
 
+Start minikube cluster
+
+```bash
+minikube start
+```
+
 Create namespaces that will be used
 
-    kubectl create namespace backend
+```bash
+kubectl create namespace backend
+```
 
 # Install nginx-ingress-controller
 
