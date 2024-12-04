@@ -4,7 +4,7 @@ tls:
   existingSecret: myservice-cert
 
 service:
-  type: ClusterIP
+  type: NodePort
 
 serverBlock: |-
   server {
@@ -19,3 +19,4 @@ serverBlock: |-
         index index.html;
     }
   }
+
