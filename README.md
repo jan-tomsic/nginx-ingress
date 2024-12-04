@@ -1,3 +1,5 @@
+This repository contains instructions and files for setting up ingress-nginx-controller with https backend using self-signed certificates on minikube kubernetes cluster.
+
 # Environment setup
 
 Create namespaces that will be used
