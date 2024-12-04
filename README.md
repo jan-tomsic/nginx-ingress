@@ -22,7 +22,7 @@ Enable ingress plugin in minikube to install ingress-nginx-controller
 minikube addons enable ingress
 ```
 
-In order to enable SSL Passthrough, we need to patch the deployment with `ingress-nginx-controller-patch.yaml`, which configures container arguments to start with enable-ssl-passthrough enabled.
+In order to enable SSL Passthrough, we need to patch the deployment with [ingress-nginx-controller-patch.yaml](ingress-nginx-controller-patch.yaml), which configures controller arguments to start with enable-ssl-passthrough enabled.
 
 ```yaml
 spec:
@@ -58,7 +58,7 @@ kubectl -n ingress-nginx get pods
 
 # Create a self-signed certificate
 
-Configure `cert/openssl.cnf` and create a self signed certificate
+Configure [cert/openssl.cnf](cert/openssl.cnf) and create a self signed certificate
 
 ```
 [req]
@@ -92,7 +92,7 @@ kubectl -n backend create secret tls myservice-cert --cert=tls.crt --key=tls.key
 
 # Install nginx web server as http/https backend service
 
-Configure `nginx-values.yaml` file to enable tls, load certificates from existing secret and configure https server block
+Configure [nginx-values.yaml](nginx-values.yaml) file to enable tls, load certificates from existing secret and configure https server block
 
 ```yaml
 tls:
@@ -118,7 +118,7 @@ serverBlock: |-
   }
 ```
 
-Install nginx backend service using a helm chart and custom `nginx-values.yaml` file
+Install nginx backend service using a helm chart and custom [nginx-values.yam](nginx-values.yaml) file
 
 ```bash
 helm -n backend install nginx-backend oci://registry-1.docker.io/bitnamicharts/nginx -f nginx-values.yaml
@@ -131,7 +131,7 @@ kubectl -n backend get pods
 
 # Configure ingress
 
-Modify `backend-ingress.yaml` with service name, host, port, certificate secretName and apply.
+Modify [backend-ingress.yaml](backend-ingress.yaml) with service name, host, port, certificate secretName and apply.
 Additionally configure `ingressClassName` and annotations.
 
 ```yaml
@@ -153,7 +153,7 @@ spec:
               service:
                 name: nginx-backend
                 port:
-                  number: 443
+                  number: 8443
   tls:
     - hosts:
         - myservice.example.com
